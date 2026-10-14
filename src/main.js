@@ -415,11 +415,17 @@ function createWindow() {
   });
 }
 
-// Interceptar cualquier WebContents creado (por ejemplo ventanas popup de autenticación OAuth)
+// Interceptar cualquier WebContents creado (por ejemplo ventanas emergentes)
 app.on('web-contents-created', (_event, contents) => {
   contents.setUserAgent(CHROME_UA);
 
   contents.on('will-navigate', (navEvent, url) => {
+    if (isOAuthProviderUrl(url)) {
+      navEvent.preventDefault();
+      shell.openExternal(url);
+      return;
+    }
+
     if (!isAllowedAppUrl(url)) {
       navEvent.preventDefault();
       shell.openExternal(url);
@@ -427,6 +433,11 @@ app.on('web-contents-created', (_event, contents) => {
   });
 
   contents.setWindowOpenHandler(({ url }) => {
+    if (isOAuthProviderUrl(url)) {
+      shell.openExternal(url);
+      return { action: 'deny' };
+    }
+
     if (isAllowedAppUrl(url)) {
       return { action: 'allow' };
     }
