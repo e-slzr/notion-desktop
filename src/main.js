@@ -7,7 +7,7 @@ app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 app.commandLine.appendSwitch('enable-features', 'OverlayScrollbar');
 
 const TITLEBAR_HEIGHT = 44;
-const DEFAULT_URL = 'https://app.notion.com/login?from=marketing&pathname=%2Fes';
+const DEFAULT_URL = 'https://www.notion.so';
 const STATE_FILE = path.join(app.getPath('userData'), 'window-state.json');
 
 app.setName('Notion');
@@ -116,25 +116,6 @@ function isAllowedAppUrl(rawUrl) {
   return isNotionDomain(rawUrl) || isAuthDomain(rawUrl);
 }
 
-function isPersistableNotionPage(rawUrl) {
-  if (!rawUrl) return false;
-  try {
-    const parsed = new URL(rawUrl);
-    if (!isNotionDomain(rawUrl)) return false;
-    // No persistir páginas temporales de login o callbacks
-    const pathLower = parsed.pathname.toLowerCase();
-    if (pathLower.includes('login') ||
-        pathLower.includes('googleauthcallback') ||
-        pathLower.includes('appleauthcallback') ||
-        pathLower.includes('samlauthcallback')) {
-      return false;
-    }
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 function triggerDesktopNotification(title, body) {
   const notifTitle = title || 'Notion';
   const notifBody = body || 'Nueva notificación';
@@ -191,8 +172,7 @@ function saveWindowState() {
       height: bounds.height,
       x: bounds.x,
       y: bounds.y,
-      isMaximized,
-      lastVisitedUrl: isPersistableNotionPage(currentLoadedUrl) ? currentLoadedUrl : undefined
+      isMaximized
     };
     fs.writeFileSync(STATE_FILE, JSON.stringify(state));
   } catch {}
@@ -303,13 +283,8 @@ function createWindow() {
   setTimeout(updateViewBounds, 50);
   setTimeout(updateViewBounds, 250);
 
-  // Determinar URL inicial (reabrir última página válida o la URL de inicio/login)
-  const startUrl = (state.lastVisitedUrl && isPersistableNotionPage(state.lastVisitedUrl))
-    ? state.lastVisitedUrl
-    : DEFAULT_URL;
-
-  currentLoadedUrl = startUrl;
-  notionView.webContents.loadURL(startUrl);
+  currentLoadedUrl = DEFAULT_URL;
+  notionView.webContents.loadURL(DEFAULT_URL);
 
   // Eventos de ventana
   mainWindow.on('resize', updateViewBounds);
@@ -376,13 +351,10 @@ function createWindow() {
     shell.openExternal(url);
   });
 
-  // Monitoreo de cambios de URL para historial y persistencia
+  // Monitoreo de cambios de URL para historial
   const handleUrlChange = (_event, url) => {
     currentLoadedUrl = url;
     syncNavigationState();
-    if (isPersistableNotionPage(url)) {
-      saveWindowState();
-    }
   };
 
   notionView.webContents.on('did-navigate', handleUrlChange);
