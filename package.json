@@ -43,9 +43,7 @@
       ],
       "maintainer": "Eliu Salazar <eliu.asalazar@gmail.com>",
       "category": "Office;ProjectManagement",
-      "icon": "assets/icon.png",
-      "desktopName": "notion-desktop.desktop",
-      "syncDesktopName": true
+      "icon": "assets/icon.png"
     },
     "win": {
       "target": [

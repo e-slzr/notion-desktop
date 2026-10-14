@@ -16,6 +16,15 @@ if (process.platform === 'linux' && typeof app.setDesktopName === 'function') {
   app.setDesktopName('notion-desktop.desktop');
 }
 
+// Registrar cliente de protocolo para deep linking (notion://)
+if (process.defaultApp) {
+  if (process.argv.length >= 2) {
+    app.setAsDefaultProtocolClient('notion', process.execPath, [path.resolve(process.argv[1])]);
+  }
+} else {
+  app.setAsDefaultProtocolClient('notion');
+}
+
 // Bloqueo de instancia única
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
@@ -32,6 +41,7 @@ let currentLoadedUrl = DEFAULT_URL;
 const CHROME_VERSION = '131.0.0.0';
 const CHROME_MAJOR = '131';
 const CHROME_UA = `Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${CHROME_VERSION} Safari/537.36`;
+app.userAgentFallback = CHROME_UA;
 
 function isNotionDomain(rawUrl) {
   if (!rawUrl) return false;
@@ -47,15 +57,28 @@ function isNotionDomain(rawUrl) {
   }
 }
 
+function isOAuthProviderUrl(rawUrl) {
+  if (!rawUrl) return false;
+  try {
+    const parsed = new URL(rawUrl);
+    const host = parsed.hostname.toLowerCase();
+    return host === 'accounts.google.com' || host.endsWith('.accounts.google.com') ||
+           host === 'appleid.apple.com' ||
+           host === 'login.microsoftonline.com' || host.endsWith('.microsoftonline.com') ||
+           host === 'login.live.com';
+  } catch {
+    return false;
+  }
+}
+
 function isAuthDomain(rawUrl) {
   if (!rawUrl) return false;
   try {
     const parsed = new URL(rawUrl);
     const host = parsed.hostname.toLowerCase();
 
-    // Google OAuth & APIs
+    // Google APIs / OAuth
     if (host === 'google.com' || host.endsWith('.google.com') ||
-        host === 'accounts.google.com' || host.endsWith('.accounts.google.com') ||
         host.endsWith('.googleusercontent.com') ||
         host.endsWith('.gstatic.com') ||
         host.endsWith('.googleapis.com') ||
@@ -63,16 +86,14 @@ function isAuthDomain(rawUrl) {
       return true;
     }
 
-    // Apple ID
+    // Apple
     if (host === 'apple.com' || host.endsWith('.apple.com') ||
         host.endsWith('.apple-cloudkit.com')) {
       return true;
     }
 
-    // Microsoft / Office 365 / Azure AD / Live
+    // Microsoft
     if (host === 'microsoft.com' || host.endsWith('.microsoft.com') ||
-        host === 'live.com' || host.endsWith('.live.com') ||
-        host === 'microsoftonline.com' || host.endsWith('.microsoftonline.com') ||
         host.endsWith('.msftauth.net') || host.endsWith('.msauth.net') ||
         host.endsWith('.windows.net')) {
       return true;
@@ -307,9 +328,13 @@ function createWindow() {
 
   // Manejo de apertura de ventanas (popups de Google OAuth, Apple ID, SSO o enlaces externos)
   notionView.webContents.setWindowOpenHandler(({ url }) => {
-    if (isAllowedAppUrl(url)) {
-      // Si es una ventana emergente de autenticación (Google, Apple, Microsoft, SAML),
-      // se permite abrir como ventana secundaria vinculada a la app sin salir al navegador externo
+    // Si es Google, Apple o Microsoft OAuth: abrir en el navegador predeterminado del sistema para evitar el bloqueo ("Navegador no seguro")
+    if (isOAuthProviderUrl(url)) {
+      shell.openExternal(url);
+      return { action: 'deny' };
+    }
+
+    if (isNotionDomain(url) || isAuthDomain(url)) {
       return {
         action: 'allow',
         overrideBrowserWindowOptions: {
@@ -319,7 +344,7 @@ function createWindow() {
           height: 720,
           center: true,
           autoHideMenuBar: true,
-          title: 'Iniciar sesión - Notion',
+          title: 'Notion',
           backgroundColor: isDark ? '#202020' : '#ffffff',
           webPreferences: {
             partition: 'persist:notion',
@@ -337,8 +362,14 @@ function createWindow() {
 
   // Navegación dentro de la vista principal
   notionView.webContents.on('will-navigate', (event, url) => {
+    if (isOAuthProviderUrl(url)) {
+      event.preventDefault();
+      shell.openExternal(url);
+      return;
+    }
+
     if (isAllowedAppUrl(url)) {
-      // Permitir la navegación interna o redirecciones de OAuth sin salir de la ventana
+      // Permitir la navegación interna
       return;
     }
     event.preventDefault();
@@ -486,12 +517,32 @@ ipcMain.on('window-resized', (_event, { width, height }) => {
   }
 });
 
-// Despertar la ventana existente si el usuario abre una segunda instancia
-app.on('second-instance', () => {
+// Despertar la ventana existente y capturar enlaces notion:// o callbacks del navegador
+app.on('second-instance', (_event, commandLine) => {
   if (mainWindow) {
     if (mainWindow.isMinimized()) mainWindow.restore();
     mainWindow.show();
     mainWindow.focus();
+
+    const targetUrl = commandLine.find(arg => arg.startsWith('notion://') || arg.startsWith('https://www.notion.so') || arg.startsWith('https://app.notion.com'));
+    if (targetUrl && notionView) {
+      const cleanUrl = targetUrl.replace(/^notion:\/\//i, 'https://');
+      notionView.webContents.loadURL(cleanUrl);
+    }
+  }
+});
+
+// Soporte para deep link en macOS y gestores de escritorio compatibles (XDG)
+app.on('open-url', (event, url) => {
+  event.preventDefault();
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+  }
+  if (notionView && (url.startsWith('notion://') || url.startsWith('https://'))) {
+    const cleanUrl = url.replace(/^notion:\/\//i, 'https://');
+    notionView.webContents.loadURL(cleanUrl);
   }
 });
 
