@@ -37,11 +37,7 @@ let lastUnreadCount = 0;
 let lastNotificationTime = 0;
 let currentLoadedUrl = DEFAULT_URL;
 
-// Versión moderna de Chrome para evitar bloqueo de Google OAuth ("Este navegador o app no es seguro")
-const CHROME_VERSION = '131.0.0.0';
-const CHROME_MAJOR = '131';
-const CHROME_UA = `Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${CHROME_VERSION} Safari/537.36`;
-app.userAgentFallback = CHROME_UA;
+let cleanUA = '';
 
 function isNotionDomain(rawUrl) {
   if (!rawUrl) return false;
@@ -225,19 +221,25 @@ function createWindow() {
   // Cargar barra de título personalizada
   mainWindow.loadFile(path.join(__dirname, 'titlebar.html'));
 
-  // Configuración de la sesión persistente de Notion
-  const notionSession = session.fromPartition('persist:notion');
-
-  // Sobrescribir User-Agent y cabeceras Client Hints sec-ch-ua para Google OAuth y servicios protegidos
-  notionSession.setUserAgent(CHROME_UA);
-
-  notionSession.webRequest.onBeforeSendHeaders((details, callback) => {
-    details.requestHeaders['User-Agent'] = CHROME_UA;
-    details.requestHeaders['sec-ch-ua'] = `"Google Chrome";v="${CHROME_MAJOR}", "Chromium";v="${CHROME_MAJOR}", "Not_A Brand";v="24"`;
-    details.requestHeaders['sec-ch-ua-mobile'] = '?0';
-    details.requestHeaders['sec-ch-ua-platform'] = '"Linux"';
-    callback({ cancel: false, requestHeaders: details.requestHeaders });
+  // Crear la vista web principal con sesión persistente
+  notionView = new WebContentsView({
+    webPreferences: {
+      partition: 'persist:notion',
+      contextIsolation: true,
+      nodeIntegration: false,
+      spellcheck: true
+    }
   });
+
+  // Limpiar UserAgent dinámicamente eliminando el token de Electron
+  const defaultUA = notionView.webContents.userAgent;
+  cleanUA = defaultUA.replace(/Electron\/[0-9\.]+\s?/, '').replace(/notion-desktop\/[0-9\.]+\s?/, '');
+  notionView.webContents.setUserAgent(cleanUA);
+  app.userAgentFallback = cleanUA;
+
+  // Configuración de la sesión persistente de Notion
+  const notionSession = notionView.webContents.session;
+  notionSession.setUserAgent(cleanUA);
 
   // Idiomas para el corrector ortográfico integrado
   try {
@@ -265,17 +267,6 @@ function createWindow() {
     return allowedPermissions.includes(permission);
   });
 
-  // Crear la vista web principal con sesión persistente
-  notionView = new WebContentsView({
-    webPreferences: {
-      partition: 'persist:notion',
-      contextIsolation: true,
-      nodeIntegration: false,
-      spellcheck: true
-    }
-  });
-
-  notionView.webContents.setUserAgent(CHROME_UA);
   mainWindow.contentView.addChildView(notionView);
 
   // Sincronización inicial de dimensiones de la vista
@@ -301,22 +292,35 @@ function createWindow() {
     mainWindow.webContents.send('window-maximize-changed', false);
   });
 
-  // Manejo de apertura de ventanas (enlaces externos y OAuth): Abrir siempre en el navegador del sistema
+  // Manejo de apertura de ventanas (popups de autenticación o enlaces externos)
   notionView.webContents.setWindowOpenHandler(({ url }) => {
+    if (isAllowedAppUrl(url)) {
+      return {
+        action: 'allow',
+        overrideBrowserWindowOptions: {
+          parent: mainWindow,
+          modal: false,
+          width: 600,
+          height: 720,
+          center: true,
+          autoHideMenuBar: true,
+          title: 'Notion',
+          backgroundColor: isDark ? '#202020' : '#ffffff',
+          webPreferences: {
+            partition: 'persist:notion',
+            contextIsolation: true,
+            nodeIntegration: false
+          }
+        }
+      };
+    }
     shell.openExternal(url);
     return { action: 'deny' };
   });
 
   // Navegación dentro de la vista principal
   notionView.webContents.on('will-navigate', (event, url) => {
-    if (isOAuthProviderUrl(url)) {
-      event.preventDefault();
-      shell.openExternal(url);
-      return;
-    }
-
     if (isAllowedAppUrl(url)) {
-      // Permitir la navegación interna
       return;
     }
     event.preventDefault();
@@ -389,15 +393,11 @@ function createWindow() {
 
 // Interceptar cualquier WebContents creado (por ejemplo ventanas emergentes)
 app.on('web-contents-created', (_event, contents) => {
-  contents.setUserAgent(CHROME_UA);
+  if (cleanUA) {
+    contents.setUserAgent(cleanUA);
+  }
 
   contents.on('will-navigate', (navEvent, url) => {
-    if (isOAuthProviderUrl(url)) {
-      navEvent.preventDefault();
-      shell.openExternal(url);
-      return;
-    }
-
     if (!isAllowedAppUrl(url)) {
       navEvent.preventDefault();
       shell.openExternal(url);
@@ -405,6 +405,9 @@ app.on('web-contents-created', (_event, contents) => {
   });
 
   contents.setWindowOpenHandler(({ url }) => {
+    if (isAllowedAppUrl(url)) {
+      return { action: 'allow' };
+    }
     shell.openExternal(url);
     return { action: 'deny' };
   });
