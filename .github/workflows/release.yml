@@ -1,4 +1,4 @@
-name: Build & Release
+name: Build & Release (Linux)
 
 on:
   push:
@@ -12,16 +12,11 @@ permissions:
 env:
   GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  CSC_IDENTITY_AUTO_DISCOVERY: false
 
 jobs:
   release:
-    name: Build on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+    name: Build Linux Packages
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
@@ -36,17 +31,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build Linux packages
-        if: matrix.os == 'ubuntu-latest'
+      - name: Build Linux packages (AppImage & deb)
         run: npm run dist:linux
-
-      - name: Build Windows installer
-        if: matrix.os == 'windows-latest'
-        run: npm run dist:win
-
-      - name: Build macOS installer
-        if: matrix.os == 'macos-latest'
-        run: npm run dist:mac
 
       - name: Upload Release Assets
         uses: softprops/action-gh-release@v2
@@ -59,8 +45,5 @@ jobs:
           files: |
             dist/*.AppImage
             dist/*.deb
-            dist/*.exe
-            dist/*.dmg
-            dist/*.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

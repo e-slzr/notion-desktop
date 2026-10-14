@@ -2,9 +2,11 @@
 
 [![Build & Release](https://github.com/e-slzr/notion-desktop/actions/workflows/release.yml/badge.svg)](https://github.com/e-slzr/notion-desktop/actions/workflows/release.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Platform: Linux | Windows | macOS](https://img.shields.io/badge/Platform-Linux%20%7C%20Windows%20%7C%20macOS-informational.svg)]()
+[![Platform: Linux](https://img.shields.io/badge/Platform-Linux%20(AppImage%20%7C%20deb)-informational.svg)]()
 
-Cliente de escritorio independiente, elegante y de alto rendimiento para **Notion**, desarrollado sobre Electron con soporte de sesión persistente, integración visual con el sistema, navegación fluida e inicio de sesión seguro (Google OAuth, Apple ID, SAML/SSO) directamente dentro de la aplicación.
+Cliente de escritorio independiente, elegante y de alto rendimiento para **Notion en Linux**, desarrollado sobre Electron con soporte de sesión persistente, integración visual con el sistema, navegación fluida e inicio de sesión seguro (Google OAuth, Apple ID, SAML/SSO) directamente dentro de la aplicación.
+
+Dado que Notion no cuenta con un cliente oficial para sistemas basados en Linux, este proyecto busca proveer una experiencia de escritorio de primer nivel para usuarios de GNOME, elementary OS Gala, KDE Plasma y otros entornos X11/Wayland.
 
 ---
 
@@ -66,16 +68,14 @@ npm start
 
 ---
 
-## 🏗️ Compilación Multiplataforma
+## 🏗️ Empaquetado y Distribución
 
-Los scripts de empaquetado generan binarios limpios y optimizados:
+Los scripts de empaquetado generan binarios nativos optimizados para Linux:
 
-| Plataforma | Comando | Formatos de salida |
+| Paquete | Comando | Ubicación de salida |
 | :--- | :--- | :--- |
-| **Linux** | `npm run dist:linux` | `.AppImage`, `.deb`, `linux-unpacked/` |
-| **Windows** | `npm run dist:win` | Instalador `.exe` (NSIS) |
-| **macOS** | `npm run dist:mac` | `.dmg` |
-| **Todas** | `npm run dist:all` | Todos los paquetes multiplataforma |
+| **AppImage & DEB** | `npm run dist:linux` | `dist/Notion-1.0.0.AppImage` y `dist/notion-desktop_1.0.0_amd64.deb` |
+| **Binario desempaquetado** | `npm run dist` | `dist/linux-unpacked/` |
 
 ---
 
