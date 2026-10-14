@@ -1,0 +1,70 @@
+{
+  "name": "notion-desktop",
+  "productName": "Notion",
+  "version": "1.0.0",
+  "description": "Cliente de escritorio ligero y elegante para Notion",
+  "homepage": "https://github.com/e-slzr/notion-desktop",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/e-slzr/notion-desktop.git"
+  },
+  "author": "Eliu Salazar <eliu.asalazar@gmail.com>",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron . --no-sandbox",
+    "dist": "electron-builder --linux AppImage deb --publish never",
+    "dist:linux": "electron-builder --linux AppImage deb --publish never",
+    "dist:win": "electron-builder --win --publish never",
+    "dist:win:zip": "electron-builder --win zip --publish never",
+    "dist:mac": "electron-builder --mac --publish never",
+    "dist:mac:zip": "electron-builder --mac zip --publish never",
+    "dist:all": "electron-builder -mwl --publish never"
+  },
+  "keywords": [
+    "notion",
+    "desktop",
+    "productivity",
+    "notes",
+    "workspace",
+    "electron"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^44.7.2",
+    "electron-builder": "^26.4.1"
+  },
+  "build": {
+    "appId": "com.eslzr.notion-desktop",
+    "productName": "Notion",
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "maintainer": "Eliu Salazar <eliu.asalazar@gmail.com>",
+      "category": "Office;ProjectManagement",
+      "icon": "assets/icon.png",
+      "desktopName": "notion-desktop.desktop",
+      "syncDesktopName": true
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "zip"
+      ],
+      "icon": "assets/icon.ico"
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.productivity",
+      "icon": "assets/icon.icns",
+      "identity": null
+    },
+    "directories": {
+      "output": "dist"
+    }
+  }
+}
