@@ -301,36 +301,8 @@ function createWindow() {
     mainWindow.webContents.send('window-maximize-changed', false);
   });
 
-  // Manejo de apertura de ventanas (popups de Google OAuth, Apple ID, SSO o enlaces externos)
+  // Manejo de apertura de ventanas (enlaces externos y OAuth): Abrir siempre en el navegador del sistema
   notionView.webContents.setWindowOpenHandler(({ url }) => {
-    // Si es Google, Apple o Microsoft OAuth: abrir en el navegador predeterminado del sistema para evitar el bloqueo ("Navegador no seguro")
-    if (isOAuthProviderUrl(url)) {
-      shell.openExternal(url);
-      return { action: 'deny' };
-    }
-
-    if (isNotionDomain(url) || isAuthDomain(url)) {
-      return {
-        action: 'allow',
-        overrideBrowserWindowOptions: {
-          parent: mainWindow,
-          modal: false,
-          width: 600,
-          height: 720,
-          center: true,
-          autoHideMenuBar: true,
-          title: 'Notion',
-          backgroundColor: isDark ? '#202020' : '#ffffff',
-          webPreferences: {
-            partition: 'persist:notion',
-            contextIsolation: true,
-            nodeIntegration: false
-          }
-        }
-      };
-    }
-
-    // Enlaces externos a sitios de terceros se abren en el navegador predeterminado del sistema
     shell.openExternal(url);
     return { action: 'deny' };
   });
@@ -433,14 +405,6 @@ app.on('web-contents-created', (_event, contents) => {
   });
 
   contents.setWindowOpenHandler(({ url }) => {
-    if (isOAuthProviderUrl(url)) {
-      shell.openExternal(url);
-      return { action: 'deny' };
-    }
-
-    if (isAllowedAppUrl(url)) {
-      return { action: 'allow' };
-    }
     shell.openExternal(url);
     return { action: 'deny' };
   });
