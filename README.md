@@ -2,7 +2,7 @@
 
 [![Build & Release](https://github.com/e-slzr/notion-desktop/actions/workflows/release.yml/badge.svg)](https://github.com/e-slzr/notion-desktop/actions/workflows/release.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Release](https://img.shields.io/badge/Release-v1.0.0-green.svg)](https://github.com/e-slzr/notion-desktop/releases)
+[![Release](https://img.shields.io/badge/Release-v1.0.1-green.svg)](https://github.com/e-slzr/notion-desktop/releases)
 [![Platform: Linux](https://img.shields.io/badge/Platform-Linux%20(AppImage%20%7C%20deb)-lightgrey.svg)](https://github.com/e-slzr/notion-desktop)
 
 Cliente de escritorio independiente, ligero y elegante para Notion en Linux, diseñado para ofrecer una experiencia de trabajo fluida y nativa sin pestañas de navegador innecesarias ni sobrecarga de recursos.
@@ -27,7 +27,7 @@ Cliente de escritorio independiente, ligero y elegante para Notion en Linux, dis
 
 ---
 
-## Descargas (v1.0.0)
+## Descargas (v1.0.1)
 
 Los paquetes compilados listos para usar se encuentran disponibles en la sección de [Releases](https://github.com/e-slzr/notion-desktop/releases) o en la carpeta `dist/`:
 

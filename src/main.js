@@ -1,6 +1,8 @@
-const { app, BrowserWindow, WebContentsView, ipcMain, shell, nativeTheme, Notification, session } = require('electron');
+const { app, BrowserWindow, WebContentsView, ipcMain, shell, nativeTheme, Notification, session, nativeImage } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
+const { execSync } = require('child_process');
 
 // Permitir reproducción de medios y audio sin interacción previa
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
@@ -36,6 +38,7 @@ let notionView = null;
 let lastUnreadCount = 0;
 let lastNotificationTime = 0;
 let currentLoadedUrl = DEFAULT_URL;
+let resolvedSystemIcon = undefined;
 
 let cleanUA = '';
 
@@ -112,40 +115,174 @@ function isAllowedAppUrl(rawUrl) {
   return isNotionDomain(rawUrl) || isAuthDomain(rawUrl);
 }
 
+// Comprueba si alguno de los nombres de icono candidatos existe en el tema del sistema Linux
+function checkSystemIconAvailable(candidateNames) {
+  if (process.platform !== 'linux') return null;
+  const names = Array.isArray(candidateNames) ? candidateNames : [candidateNames];
+
+  const home = os.homedir();
+  const baseDirs = [
+    path.join(home, '.local/share/icons'),
+    path.join(home, '.icons'),
+    '/usr/local/share/icons',
+    '/usr/share/icons',
+    '/usr/share/pixmaps'
+  ];
+
+  const exts = ['.svg', '.png', '.xpm'];
+
+  const themes = new Set();
+  try {
+    const stdout = execSync('gsettings get org.gnome.desktop.interface icon-theme', { encoding: 'utf8', timeout: 500 }).trim();
+    const currentTheme = stdout.replace(/^['\"]|['\"]$/g, '');
+    if (currentTheme) themes.add(currentTheme);
+  } catch (e) {}
+  themes.add('hicolor');
+
+  for (const name of names) {
+    // 1. Comprobar directamente en pixmaps
+    for (const ext of exts) {
+      if (fs.existsSync(path.join('/usr/share/pixmaps', name + ext))) {
+        return name;
+      }
+    }
+
+    // 2. Comprobar en tema activo y tema fallback hicolor
+    for (const base of baseDirs) {
+      if (!fs.existsSync(base)) continue;
+      for (const theme of themes) {
+        const themePath = path.join(base, theme);
+        if (!fs.existsSync(themePath)) continue;
+        const subdirs = [
+          'apps/scalable', 'scalable/apps', 'apps',
+          '512x512/apps', '256x256/apps', '128x128/apps',
+          '64x64/apps', '48x48/apps', '32x32/apps', '24x24/apps', '16x16/apps'
+        ];
+        for (const sub of subdirs) {
+          for (const ext of exts) {
+            if (fs.existsSync(path.join(themePath, sub, name + ext))) {
+              return name;
+            }
+          }
+        }
+      }
+    }
+
+    // 3. Comprobar en otros temas instalados en los directorios base
+    for (const base of baseDirs) {
+      if (!fs.existsSync(base)) continue;
+      try {
+        const entries = fs.readdirSync(base, { withFileTypes: true });
+        for (const entry of entries) {
+          if (!entry.isDirectory()) continue;
+          const themePath = path.join(base, entry.name);
+          const subdirs = ['apps/scalable', 'scalable/apps', 'apps', '512x512/apps', '256x256/apps', '48x48/apps'];
+          for (const sub of subdirs) {
+            for (const ext of exts) {
+              if (fs.existsSync(path.join(themePath, sub, name + ext))) {
+                return name;
+              }
+            }
+          }
+        }
+      } catch (e) {}
+    }
+  }
+
+  return null;
+}
+
+function getSystemIconName(candidateNames) {
+  if (resolvedSystemIcon !== undefined) return resolvedSystemIcon;
+  resolvedSystemIcon = checkSystemIconAvailable(candidateNames);
+  return resolvedSystemIcon;
+}
+
+// Ruta física al icono por defecto empaquetado con la aplicación
+function getDefaultIconPath() {
+  if (process.resourcesPath) {
+    const unpackedIcon = path.join(process.resourcesPath, 'app.asar.unpacked', 'assets', 'icon.png');
+    if (fs.existsSync(unpackedIcon)) {
+      return unpackedIcon;
+    }
+  }
+  const devIcon = path.join(__dirname, '../assets/icon.png');
+  if (fs.existsSync(devIcon) && !devIcon.includes('app.asar')) {
+    return devIcon;
+  }
+  return path.join(__dirname, '../assets/icon.png');
+}
+
 function triggerDesktopNotification(title, body) {
   const notifTitle = title || 'Notion';
   const notifBody = body || 'Nueva notificación';
-  const notifIcon = path.join(__dirname, '../assets/icon.png');
+  const defaultIconPath = getDefaultIconPath();
 
-  if (process.platform === 'linux') {
-    const { execFile } = require('child_process');
-    execFile('notify-send', [
-      '-a', 'Notion',
-      '-i', notifIcon,
-      '-u', 'normal',
-      notifTitle,
-      notifBody
-    ], (err) => {
-      if (err) console.error('Error al emitir notify-send:', err);
-    });
-  } else if (Notification.isSupported()) {
+  console.log('[NOTIF DISPARADA]:', notifTitle, notifBody);
+
+  // 1. Notificación nativa de Electron (utiliza DBus / org.freedesktop.Notifications con soporte completo de icono y clic)
+  if (Notification.isSupported()) {
     try {
+      let iconOption;
+      if (process.platform === 'linux') {
+        const systemIcon = getSystemIconName(['notion', 'notion-desktop', 'notion-app', 'notion-app-enhanced']);
+        if (systemIcon) {
+          // Si el tema de iconos del sistema tiene el icono disponible, usamos su nombre de tema para evitar el badge [i]
+          iconOption = systemIcon;
+        } else if (fs.existsSync(defaultIconPath)) {
+          // Si no está disponible en el tema del sistema, usamos el icono por defecto empaquetado
+          const img = nativeImage.createFromPath(defaultIconPath);
+          iconOption = img.isEmpty() ? defaultIconPath : img;
+        } else {
+          iconOption = defaultIconPath;
+        }
+      } else if (fs.existsSync(defaultIconPath)) {
+        const img = nativeImage.createFromPath(defaultIconPath);
+        iconOption = img.isEmpty() ? defaultIconPath : img;
+      } else {
+        iconOption = defaultIconPath;
+      }
+
       const notif = new Notification({
         title: notifTitle,
         body: notifBody,
-        icon: notifIcon
+        icon: iconOption,
+        silent: false
       });
+
       notif.on('click', () => {
         if (mainWindow) {
           if (mainWindow.isMinimized()) mainWindow.restore();
           mainWindow.show();
           mainWindow.focus();
         }
+        if (notionView) {
+          notionView.webContents.focus();
+        }
       });
+
       notif.show();
+      return;
     } catch (err) {
       console.error('Error al mostrar notificación nativa:', err);
     }
+  }
+
+  // 2. Fallback con notify-send para entornos Linux donde Notification.isSupported() falle
+  if (process.platform === 'linux') {
+    const { execFile } = require('child_process');
+    const systemIcon = getSystemIconName(['notion', 'notion-desktop', 'notion-app', 'notion-app-enhanced']);
+    const notifIcon = systemIcon || defaultIconPath;
+    execFile('notify-send', [
+      '-a', 'notion-desktop',
+      '-i', notifIcon,
+      '-h', 'string:desktop-entry:notion-desktop',
+      '-u', 'normal',
+      notifTitle,
+      notifBody
+    ], (err) => {
+      if (err) console.error('Error al emitir notify-send:', err);
+    });
   }
 }
 
@@ -206,7 +343,7 @@ function createWindow() {
     minHeight: 500,
     frame: false,
     backgroundColor: bgColor,
-    icon: path.join(__dirname, '../assets/icon.png'),
+    icon: getDefaultIconPath(),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,

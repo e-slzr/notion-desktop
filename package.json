@@ -1,7 +1,7 @@
 {
   "name": "notion-desktop",
   "productName": "Notion",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Cliente de escritorio ligero y elegante para Notion",
   "homepage": "https://github.com/e-slzr/notion-desktop",
   "repository": {
@@ -43,6 +43,9 @@
     },
     "directories": {
       "output": "dist"
-    }
+    },
+    "asarUnpack": [
+      "assets/**/*"
+    ]
   }
 }
